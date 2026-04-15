@@ -146,34 +146,34 @@ if uploaded:
         prev_view = data[data['Month'] == compare_month]
 
         # --- METRICS ---
-        assets = view[view['Category'] == 'Assets']['Amount'].sum()
-        liab = view[view['Category'] == 'Liabilities']['Amount'].sum()
+        assets = abs(view[view['Category'] == 'Assets']['Amount'].sum())
+        liab = abs(view[view['Category'] == 'Liabilities']['Amount'].sum())
 
         c1, c2 = st.columns(2)
-        c1.metric("Assets", f"₹{abs(assets):,.0f}")
-        c2.metric("Liabilities", f"₹{abs(liab):,.0f}")
+        c1.metric("Assets", f"₹{assets:,.0f}")
+        c2.metric("Liabilities", f"₹{liab:,.0f}")
 
         st.divider()
 
-        # --- KPI ---
-        revenue = view[view['Category'] == 'Revenue']['Amount'].sum()
-        expenses = view[view['Category'] == 'Expenses']['Amount'].sum()
+        # --- KPI (FIXED LOGIC) ---
+        revenue = abs(view[view['Category'] == 'Revenue']['Amount'].sum())
+        expenses = abs(view[view['Category'] == 'Expenses']['Amount'].sum())
 
-        prev_revenue = prev_view[prev_view['Category'] == 'Revenue']['Amount'].sum()
+        prev_revenue = abs(prev_view[prev_view['Category'] == 'Revenue']['Amount'].sum())
 
-        burn_rate = abs(expenses)
-        expense_ratio = (abs(expenses) / revenue * 100) if revenue != 0 else 0
+        profit = revenue - expenses
+
+        burn_rate = expenses
+        expense_ratio = (expenses / revenue * 100) if revenue != 0 else 0
         revenue_growth = ((revenue - prev_revenue) / prev_revenue * 100) if prev_revenue != 0 else 0
-
-        profit = revenue - abs(expenses)
         profit_margin = (profit / revenue * 100) if revenue != 0 else 0
-        al_ratio = (abs(assets) / abs(liab)) if liab != 0 else 0
+        al_ratio = (assets / liab) if liab != 0 else 0
 
-        asset_turnover = (revenue / abs(assets)) if assets != 0 else 0
-        debt_ratio = (abs(liab) / abs(assets)) if assets != 0 else 0
+        asset_turnover = (revenue / assets) if assets != 0 else 0
+        debt_ratio = (liab / assets) if assets != 0 else 0
 
-        profit_exp_ratio = (profit / abs(expenses)) if expenses != 0 else 0
-        efficiency_ratio = (revenue / abs(expenses)) if expenses != 0 else 0
+        profit_exp_ratio = (profit / expenses) if expenses != 0 else 0
+        efficiency_ratio = (revenue / expenses) if expenses != 0 else 0
 
         st.subheader("📈 Key Performance Indicators")
 
@@ -230,7 +230,7 @@ if uploaded:
 
         st.divider()
 
-        # --- AUTO INSIGHTS ---
+        # --- AUTO INSIGHTS (FIXED) ---
         st.subheader("🧠 Auto Insights")
 
         insights = []
@@ -240,15 +240,10 @@ if uploaded:
         elif revenue_growth < -10:
             insights.append("📉 Revenue has declined.")
 
-        expense_change = variance_df.loc['Expenses','% Change'] if 'Expenses' in variance_df.index else 0
-
-        if expense_change > 30:
-            insights.append("⚠️ Expenses increased sharply.")
-        elif expense_change < -20:
-            insights.append("✅ Expenses reduced.")
-
         if expense_ratio > 100:
             insights.append("🚨 Expenses exceed revenue. Business is running at a loss.")
+        elif expense_ratio < 60:
+            insights.append("💰 Good cost control observed.")
 
         if efficiency_ratio < 1:
             insights.append("⚠️ Business is inefficient (expenses exceed revenue).")
@@ -256,16 +251,18 @@ if uploaded:
         if asset_turnover < 0.5:
             insights.append("⚠️ Low asset utilization observed.")
 
-        if abs(assets) < abs(liab):
+        if assets < liab:
             insights.append("⚠️ Liabilities exceed assets.")
         else:
             insights.append("✅ Strong asset position.")
 
-        if insights:
-            for i in insights:
-                st.write(i)
+        if profit > 0:
+            insights.append("✅ Business is profitable.")
         else:
-            st.write("No major insights.")
+            insights.append("❌ Business is making a loss.")
+
+        for i in insights:
+            st.write(i)
 
         st.divider()
 
