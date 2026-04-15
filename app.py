@@ -65,7 +65,6 @@ def universal_parser(file):
 
             temp = pd.DataFrame()
             temp['Account'] = data_rows.iloc[:, acc_col].astype(str).str.strip()
-
             temp = temp[~temp['Account'].str.match(r'^[0-9.\sDrCr()-]+$', na=False)]
 
             temp['Amount'] = data_rows.iloc[:, i].apply(clean_to_float)
@@ -96,7 +95,6 @@ if uploaded:
         # --- LOAD MAPPING ---
         if mapping_file:
             map_df = pd.read_csv(mapping_file)
-
             mapping_dict = {
                 str(row['Account']).lower().strip(): row['Category']
                 for _, row in map_df.iterrows()
@@ -107,7 +105,6 @@ if uploaded:
         # --- SMART CATEGORY FUNCTION ---
         def smart_cat(x):
             x_str = str(x).lower().strip()
-
             x_str = re.sub(r'[^a-z0-9 ]', ' ', x_str)
 
             words = x_str.split()
@@ -116,7 +113,6 @@ if uploaded:
 
             for key in sorted(mapping_dict.keys(), key=len, reverse=True):
                 key_clean = key.lower().strip()
-
                 key_words = key_clean.split()
                 key_words = [w[:-1] if w.endswith('s') else w for w in key_words]
                 key_clean = " ".join(key_words)
@@ -126,13 +122,10 @@ if uploaded:
 
             if any(i in x_str for i in ['cash','bank','receivable','inventory','furniture','fixture']):
                 return 'Assets'
-
             if any(i in x_str for i in ['loan','payable','capital']):
                 return 'Liabilities'
-
             if any(i in x_str for i in ['sale','income','revenue']):
                 return 'Revenue'
-
             if any(i in x_str for i in ['expense','rent','salary','wage','cost']):
                 return 'Expenses'
 
@@ -172,12 +165,39 @@ if uploaded:
         expense_ratio = (abs(expenses) / revenue * 100) if revenue != 0 else 0
         revenue_growth = ((revenue - prev_revenue) / prev_revenue * 100) if prev_revenue != 0 else 0
 
+        profit = revenue - abs(expenses)
+        profit_margin = (profit / revenue * 100) if revenue != 0 else 0
+        al_ratio = (abs(assets) / abs(liab)) if liab != 0 else 0
+
+        asset_turnover = (revenue / abs(assets)) if assets != 0 else 0
+        debt_ratio = (abs(liab) / abs(assets)) if assets != 0 else 0
+
+        profit_exp_ratio = (profit / abs(expenses)) if expenses != 0 else 0
+        efficiency_ratio = (revenue / abs(expenses)) if expenses != 0 else 0
+
         st.subheader("📈 Key Performance Indicators")
 
-        k1, k2, k3 = st.columns(3)
+        k1, k2, k3, k4 = st.columns(4)
+
         k1.metric("Burn Rate", f"₹{burn_rate:,.0f}")
-        k2.metric("Expense Ratio", f"{expense_ratio:.1f}%")
+
+        expense_label = "Expense Ratio"
+        if expense_ratio > 100:
+            expense_label = "⚠️ Expense Ratio (Loss)"
+        k2.metric(expense_label, f"{expense_ratio:.1f}%")
+
         k3.metric("Revenue Growth", f"{revenue_growth:.1f}%", delta=f"{revenue_growth:.1f}%")
+        k4.metric("Profit Margin", f"{profit_margin:.1f}%")
+
+        k5, k6, k7 = st.columns(3)
+        k5.metric("Profit", f"₹{profit:,.0f}")
+        k6.metric("A/L Ratio", f"{al_ratio:.2f}")
+        k7.metric("Asset Turnover", f"{asset_turnover:.2f}")
+
+        k8, k9, k10 = st.columns(3)
+        k8.metric("Debt Ratio", f"{debt_ratio:.2f}")
+        k9.metric("Profit/Expense Ratio", f"{profit_exp_ratio:.2f}")
+        k10.metric("Efficiency Ratio", f"{efficiency_ratio:.2f}")
 
         st.divider()
 
@@ -227,10 +247,14 @@ if uploaded:
         elif expense_change < -20:
             insights.append("✅ Expenses reduced.")
 
-        if expense_ratio > 80:
-            insights.append("🚨 High expense ratio.")
-        elif expense_ratio < 50:
-            insights.append("💰 Healthy cost structure.")
+        if expense_ratio > 100:
+            insights.append("🚨 Expenses exceed revenue. Business is running at a loss.")
+
+        if efficiency_ratio < 1:
+            insights.append("⚠️ Business is inefficient (expenses exceed revenue).")
+
+        if asset_turnover < 0.5:
+            insights.append("⚠️ Low asset utilization observed.")
 
         if abs(assets) < abs(liab):
             insights.append("⚠️ Liabilities exceed assets.")
