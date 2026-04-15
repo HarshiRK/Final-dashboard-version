@@ -65,6 +65,7 @@ def universal_parser(file):
 
             temp = pd.DataFrame()
             temp['Account'] = data_rows.iloc[:, acc_col].astype(str).str.strip()
+
             temp = temp[~temp['Account'].str.match(r'^[0-9.\sDrCr()-]+$', na=False)]
 
             temp['Amount'] = data_rows.iloc[:, i].apply(clean_to_float)
@@ -80,7 +81,7 @@ def universal_parser(file):
 
 # --- UI ---
 st.title("📊 Advanced Financial Dashboard")
-st.markdown("With KPI & Flexible Comparison 🚀")
+st.markdown("Robust Mapping + KPI + Variance 🚀")
 
 uploaded = st.sidebar.file_uploader("Upload Trial Balance CSV", type="csv")
 mapping_file = st.sidebar.file_uploader("Upload Mapping File", type="csv")
@@ -95,30 +96,56 @@ if uploaded:
         # --- LOAD MAPPING ---
         if mapping_file:
             map_df = pd.read_csv(mapping_file)
-            mapping_dict = dict(zip(map_df['Account'].str.lower(), map_df['Category']))
+
+            mapping_dict = {
+                str(row['Account']).lower().strip(): row['Category']
+                for _, row in map_df.iterrows()
+            }
         else:
             mapping_dict = {}
 
         # --- SMART CATEGORY FUNCTION ---
         def smart_cat(x):
-            x_str = str(x).lower()
+            x_str = str(x).lower().strip()
 
+            # remove special characters
+            x_str = re.sub(r'[^a-z0-9 ]', ' ', x_str)
+
+            # basic singular handling
+            words = x_str.split()
+            words = [w[:-1] if w.endswith('s') else w for w in words]
+            x_str = " ".join(words)
+
+            # mapping priority
             for key in sorted(mapping_dict.keys(), key=len, reverse=True):
-                if key in x_str:
+                key_clean = key.lower().strip()
+
+                key_words = key_clean.split()
+                key_words = [w[:-1] if w.endswith('s') else w for w in key_words]
+                key_clean = " ".join(key_words)
+
+                if key_clean in x_str:
                     return mapping_dict[key]
 
-            if any(i in x_str for i in ['cash','bank','receivable','inventory']):
+            # fallback logic
+            if any(i in x_str for i in ['cash','bank','receivable','inventory','furniture','fixture']):
                 return 'Assets'
+
             if any(i in x_str for i in ['loan','payable','capital']):
                 return 'Liabilities'
-            if any(i in x_str for i in ['sale','income']):
+
+            if any(i in x_str for i in ['sale','income','revenue']):
                 return 'Revenue'
-            if any(i in x_str for i in ['expense','rent','salary']):
+
+            if any(i in x_str for i in ['expense','rent','salary','wage','cost']):
                 return 'Expenses'
 
             return "Others"
 
         data['Category'] = data['Account'].apply(smart_cat)
+
+        # --- DEBUG (optional, can remove later) ---
+        st.write("Unmapped Accounts:", data[data['Category']=="Others"]['Account'].unique())
 
         # --- MONTH SELECTION ---
         months = list(data['Month'].unique())
