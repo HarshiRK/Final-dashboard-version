@@ -116,6 +116,15 @@ if uploaded:
         months = list(data['Month'].unique())
         sel_month = st.sidebar.selectbox("Select Month", months)
         view = data[data['Month'] == sel_month]
+        # --- PREVIOUS MONTH DATA ---
+month_order = list(data['Month'].unique())
+
+try:
+    current_index = month_order.index(sel_month)
+    prev_month = month_order[current_index - 1]
+    prev_view = data[data['Month'] == prev_month]
+except:
+    prev_view = pd.DataFrame()
 
         # --- METRICS ---
         assets = view[view['Category'] == 'Assets']['Amount'].sum()
@@ -132,6 +141,33 @@ if uploaded:
         c4.metric("Profit/Loss", f"₹{profit:,.0f}", delta="Profit" if profit>=0 else "Loss")
 
         st.divider()
+# --- VARIANCE ANALYSIS ---
+st.subheader("📊 Variance Analysis")
+
+current_summary = view.groupby('Category')['Amount'].sum()
+prev_summary = prev_view.groupby('Category')['Amount'].sum()
+
+variance_df = pd.DataFrame({
+    'Current': current_summary,
+    'Previous': prev_summary
+}).fillna(0)
+
+variance_df['Change'] = variance_df['Current'] - variance_df['Previous']
+
+variance_df['% Change'] = variance_df.apply(
+    lambda x: (x['Change'] / x['Previous'] * 100) if x['Previous'] != 0 else 0,
+    axis=1
+)
+
+st.dataframe(
+    variance_df.style.format({
+        'Current': '₹{:,.0f}',
+        'Previous': '₹{:,.0f}',
+        'Change': '₹{:,.0f}',
+        '% Change': '{:.1f}%'
+    }),
+    use_container_width=True
+)
 
         # --- CHARTS ---
         col1, col2 = st.columns(2)
