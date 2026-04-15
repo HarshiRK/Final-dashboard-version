@@ -81,7 +81,7 @@ def universal_parser(file):
 
 # --- UI ---
 st.title("📊 Advanced Financial Dashboard")
-st.markdown("Robust Mapping + KPI + Variance 🚀")
+st.markdown("Smart MIS Dashboard with Insights 🚀")
 
 uploaded = st.sidebar.file_uploader("Upload Trial Balance CSV", type="csv")
 mapping_file = st.sidebar.file_uploader("Upload Mapping File", type="csv")
@@ -108,15 +108,12 @@ if uploaded:
         def smart_cat(x):
             x_str = str(x).lower().strip()
 
-            # remove special characters
             x_str = re.sub(r'[^a-z0-9 ]', ' ', x_str)
 
-            # basic singular handling
             words = x_str.split()
             words = [w[:-1] if w.endswith('s') else w for w in words]
             x_str = " ".join(words)
 
-            # mapping priority
             for key in sorted(mapping_dict.keys(), key=len, reverse=True):
                 key_clean = key.lower().strip()
 
@@ -127,7 +124,6 @@ if uploaded:
                 if key_clean in x_str:
                     return mapping_dict[key]
 
-            # fallback logic
             if any(i in x_str for i in ['cash','bank','receivable','inventory','furniture','fixture']):
                 return 'Assets'
 
@@ -144,7 +140,7 @@ if uploaded:
 
         data['Category'] = data['Account'].apply(smart_cat)
 
-        # --- DEBUG (optional, can remove later) ---
+        # --- DEBUG ---
         st.write("Unmapped Accounts:", data[data['Category']=="Others"]['Account'].unique())
 
         # --- MONTH SELECTION ---
@@ -156,7 +152,7 @@ if uploaded:
         view = data[data['Month'] == sel_month]
         prev_view = data[data['Month'] == compare_month]
 
-        # --- BASIC METRICS ---
+        # --- METRICS ---
         assets = view[view['Category'] == 'Assets']['Amount'].sum()
         liab = view[view['Category'] == 'Liabilities']['Amount'].sum()
 
@@ -185,7 +181,7 @@ if uploaded:
 
         st.divider()
 
-        # --- VARIANCE ANALYSIS ---
+        # --- VARIANCE ---
         st.subheader("📊 Variance Analysis")
 
         current_summary = view.groupby('Category')['Amount'].sum()
@@ -211,6 +207,41 @@ if uploaded:
             }),
             use_container_width=True
         )
+
+        st.divider()
+
+        # --- AUTO INSIGHTS ---
+        st.subheader("🧠 Auto Insights")
+
+        insights = []
+
+        if revenue_growth > 20:
+            insights.append("📈 Revenue has significantly increased.")
+        elif revenue_growth < -10:
+            insights.append("📉 Revenue has declined.")
+
+        expense_change = variance_df.loc['Expenses','% Change'] if 'Expenses' in variance_df.index else 0
+
+        if expense_change > 30:
+            insights.append("⚠️ Expenses increased sharply.")
+        elif expense_change < -20:
+            insights.append("✅ Expenses reduced.")
+
+        if expense_ratio > 80:
+            insights.append("🚨 High expense ratio.")
+        elif expense_ratio < 50:
+            insights.append("💰 Healthy cost structure.")
+
+        if abs(assets) < abs(liab):
+            insights.append("⚠️ Liabilities exceed assets.")
+        else:
+            insights.append("✅ Strong asset position.")
+
+        if insights:
+            for i in insights:
+                st.write(i)
+        else:
+            st.write("No major insights.")
 
         st.divider()
 
