@@ -16,9 +16,6 @@ def clean_to_float(v):
     s = re.sub(r'[^0-9.]', '', s)
     
     try:
-        if s.count('.') > 1:
-            parts = s.split('.')
-            s = "".join(parts[:-1]) + "." + parts[-1]
         val = float(s) if s else 0.0
         return -val if is_credit else val
     except:
@@ -49,7 +46,6 @@ def universal_parser(file):
     for i, val in enumerate(header_row):
         if "closing" in str(val).lower():
 
-            # find account column
             acc_col = None
             for ac in reversed(account_cols):
                 if ac < i:
@@ -59,7 +55,6 @@ def universal_parser(file):
             if acc_col is None:
                 continue
 
-            # find month
             month = "Total"
             for r in range(header_idx):
                 for c in range(i, acc_col - 1, -1):
@@ -85,9 +80,11 @@ def universal_parser(file):
 
 # --- UI ---
 st.title("📊 Advanced Financial Dashboard")
-st.markdown("Now with Profit/Loss & Trends 🚀")
+st.markdown("With KPI & Variance Analysis 🚀")
 
-uploaded = st.sidebar.file_uploader("Upload CSV", type="csv")
+uploaded = st.sidebar.file_uploader("Upload Trial Balance CSV", type="csv")
+mapping_file = st.sidebar.file_uploader("Upload Mapping File", type="csv")
+
 
 if uploaded:
     data, err = universal_parser(uploaded)
@@ -96,94 +93,123 @@ if uploaded:
         st.error(err)
 
     else:
-        # --- CATEGORY ---
-        def quick_cat(x):
-            x = str(x).lower()
+        # --- LOAD MAPPING ---
+        if mapping_file:
+            map_df = pd.read_csv(mapping_file)
+            mapping_dict = dict(zip(map_df['Account'].str.lower(), map_df['Category']))
+        else:
+            mapping_dict = {}
 
-            if any(i in x for i in ['cash','bank','inventory','asset','receivable']):
+        # --- SMART CATEGORY FUNCTION ---
+        def smart_cat(x):
+            x_str = str(x).lower()
+
+            for key in sorted(mapping_dict.keys(), key=len, reverse=True):
+                if key in x_str:
+                    return mapping_dict[key]
+
+            if any(i in x_str for i in ['cash','bank','receivable','inventory']):
                 return 'Assets'
-            if any(i in x for i in ['loan','payable','capital','equity','reserve']):
+            if any(i in x_str for i in ['loan','payable','capital']):
                 return 'Liabilities'
-            if any(i in x for i in ['sale','revenue','income']):
+            if any(i in x_str for i in ['sale','income']):
                 return 'Revenue'
-            if any(i in x for i in ['purchase','expense','rent','salary']):
+            if any(i in x_str for i in ['expense','rent','salary']):
                 return 'Expenses'
-            return 'Others'
 
-        data['Category'] = data['Account'].apply(quick_cat)
+            return "Others"
 
-        # --- MONTH SELECT ---
+        data['Category'] = data['Account'].apply(smart_cat)
+
+        # --- MONTH SELECTION ---
         months = list(data['Month'].unique())
         sel_month = st.sidebar.selectbox("Select Month", months)
+
         view = data[data['Month'] == sel_month]
-        # --- PREVIOUS MONTH DATA ---
-month_order = list(data['Month'].unique())
 
-try:
-    current_index = month_order.index(sel_month)
-    prev_month = month_order[current_index - 1]
-    prev_view = data[data['Month'] == prev_month]
-except:
-    prev_view = pd.DataFrame()
-
-        # --- METRICS ---
+        # --- BASIC METRICS ---
         assets = view[view['Category'] == 'Assets']['Amount'].sum()
         liab = view[view['Category'] == 'Liabilities']['Amount'].sum()
+
+        c1, c2 = st.columns(2)
+        c1.metric("Assets", f"₹{abs(assets):,.0f}")
+        c2.metric("Liabilities", f"₹{abs(liab):,.0f}")
+
+        st.divider()
+
+        # --- KPI ---
         revenue = view[view['Category'] == 'Revenue']['Amount'].sum()
         expenses = view[view['Category'] == 'Expenses']['Amount'].sum()
 
-        profit = revenue - abs(expenses)
+        burn_rate = abs(expenses)
+        expense_ratio = (abs(expenses) / revenue * 100) if revenue != 0 else 0
 
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Assets", f"₹{abs(assets):,.0f}")
-        c2.metric("Liabilities", f"₹{abs(liab):,.0f}")
-        c3.metric("Revenue", f"₹{abs(revenue):,.0f}")
-        c4.metric("Profit/Loss", f"₹{profit:,.0f}", delta="Profit" if profit>=0 else "Loss")
+        month_order = list(data['Month'].unique())
+
+        try:
+            current_index = month_order.index(sel_month)
+            prev_month = month_order[current_index - 1]
+            prev_view = data[data['Month'] == prev_month]
+            prev_revenue = prev_view[prev_view['Category'] == 'Revenue']['Amount'].sum()
+
+            revenue_growth = ((revenue - prev_revenue) / prev_revenue * 100) if prev_revenue != 0 else 0
+
+        except:
+            prev_view = pd.DataFrame()
+            revenue_growth = 0
+
+        st.subheader("📈 Key Performance Indicators")
+
+        k1, k2, k3 = st.columns(3)
+        k1.metric("Burn Rate", f"₹{burn_rate:,.0f}")
+        k2.metric("Expense Ratio", f"{expense_ratio:.1f}%")
+        k3.metric("Revenue Growth", f"{revenue_growth:.1f}%", delta=f"{revenue_growth:.1f}%")
 
         st.divider()
-# --- VARIANCE ANALYSIS ---
-st.subheader("📊 Variance Analysis")
 
-current_summary = view.groupby('Category')['Amount'].sum()
-prev_summary = prev_view.groupby('Category')['Amount'].sum()
+        # --- VARIANCE ANALYSIS ---
+        st.subheader("📊 Variance Analysis")
 
-variance_df = pd.DataFrame({
-    'Current': current_summary,
-    'Previous': prev_summary
-}).fillna(0)
+        current_summary = view.groupby('Category')['Amount'].sum()
+        prev_summary = prev_view.groupby('Category')['Amount'].sum()
 
-variance_df['Change'] = variance_df['Current'] - variance_df['Previous']
+        variance_df = pd.DataFrame({
+            'Current': current_summary,
+            'Previous': prev_summary
+        }).fillna(0)
 
-variance_df['% Change'] = variance_df.apply(
-    lambda x: (x['Change'] / x['Previous'] * 100) if x['Previous'] != 0 else 0,
-    axis=1
-)
+        variance_df['Change'] = variance_df['Current'] - variance_df['Previous']
+        variance_df['% Change'] = variance_df.apply(
+            lambda x: (x['Change'] / x['Previous'] * 100) if x['Previous'] != 0 else 0,
+            axis=1
+        )
 
-st.dataframe(
-    variance_df.style.format({
-        'Current': '₹{:,.0f}',
-        'Previous': '₹{:,.0f}',
-        'Change': '₹{:,.0f}',
-        '% Change': '{:.1f}%'
-    }),
-    use_container_width=True
-)
+        st.dataframe(
+            variance_df.style.format({
+                'Current': '₹{:,.0f}',
+                'Previous': '₹{:,.0f}',
+                'Change': '₹{:,.0f}',
+                '% Change': '{:.1f}%'
+            }),
+            use_container_width=True
+        )
+
+        st.divider()
 
         # --- CHARTS ---
         col1, col2 = st.columns(2)
 
         with col1:
-            st.subheader("Category Breakdown")
             fig = px.pie(view, values=view['Amount'].abs(), names='Category', hole=0.4)
             st.plotly_chart(fig, use_container_width=True)
 
         with col2:
-            st.subheader("Monthly Trend")
             trend = data.groupby('Month')['Amount'].sum().reset_index()
             fig2 = px.line(trend, x='Month', y='Amount', markers=True)
             st.plotly_chart(fig2, use_container_width=True)
 
         st.divider()
 
-        st.subheader("Detailed Table")
+        # --- TABLE ---
+        st.subheader("Detailed Data")
         st.dataframe(view[['Account','Category','Amount']], use_container_width=True)
