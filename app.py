@@ -80,11 +80,10 @@ def universal_parser(file):
 
 # --- UI ---
 st.title("📊 Advanced Financial Dashboard")
-st.markdown("With KPI & Variance Analysis 🚀")
+st.markdown("With KPI & Flexible Comparison 🚀")
 
 uploaded = st.sidebar.file_uploader("Upload Trial Balance CSV", type="csv")
 mapping_file = st.sidebar.file_uploader("Upload Mapping File", type="csv")
-
 
 if uploaded:
     data, err = universal_parser(uploaded)
@@ -123,9 +122,12 @@ if uploaded:
 
         # --- MONTH SELECTION ---
         months = list(data['Month'].unique())
+
         sel_month = st.sidebar.selectbox("Select Month", months)
+        compare_month = st.sidebar.selectbox("Compare With", months)
 
         view = data[data['Month'] == sel_month]
+        prev_view = data[data['Month'] == compare_month]
 
         # --- BASIC METRICS ---
         assets = view[view['Category'] == 'Assets']['Amount'].sum()
@@ -141,22 +143,11 @@ if uploaded:
         revenue = view[view['Category'] == 'Revenue']['Amount'].sum()
         expenses = view[view['Category'] == 'Expenses']['Amount'].sum()
 
+        prev_revenue = prev_view[prev_view['Category'] == 'Revenue']['Amount'].sum()
+
         burn_rate = abs(expenses)
         expense_ratio = (abs(expenses) / revenue * 100) if revenue != 0 else 0
-
-        month_order = list(data['Month'].unique())
-
-        try:
-            current_index = month_order.index(sel_month)
-            prev_month = month_order[current_index - 1]
-            prev_view = data[data['Month'] == prev_month]
-            prev_revenue = prev_view[prev_view['Category'] == 'Revenue']['Amount'].sum()
-
-            revenue_growth = ((revenue - prev_revenue) / prev_revenue * 100) if prev_revenue != 0 else 0
-
-        except:
-            prev_view = pd.DataFrame()
-            revenue_growth = 0
+        revenue_growth = ((revenue - prev_revenue) / prev_revenue * 100) if prev_revenue != 0 else 0
 
         st.subheader("📈 Key Performance Indicators")
 
